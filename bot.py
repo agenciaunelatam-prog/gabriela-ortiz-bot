@@ -92,7 +92,7 @@ def get_facebook_posts(limit=20):
 
 
 def generate_press_release(post_text):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": GEMINI_PROMPT.format(post_text=post_text)}]}]}
     response = requests.post(url, json=payload)
     if not response.ok:
