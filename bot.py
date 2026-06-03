@@ -34,12 +34,46 @@ def save_processed_id(post_id):
         f.write(post_id + "\n")
 
 
+def get_page_token():
+    """Obtiene el access token específico de la página usando el token de sistema."""
+    url = "https://graph.facebook.com/v19.0/me/accounts"
+    params = {"access_token": FACEBOOK_TOKEN}
+    response = requests.get(url, params=params)
+    print(f"GET /me/accounts: status {response.status_code}")
+    if not response.ok:
+        print(f"  Error: {response.text[:300]}")
+        return None
+    accounts = response.json().get("data", [])
+    print(f"Páginas accesibles: {len(accounts)}")
+    for acc in accounts:
+        print(f"  - ID: {acc.get('id')} | Nombre: {acc.get('name')}")
+        if acc.get("id") == FACEBOOK_PAGE_ID or acc.get("name", "").lower().replace(" ", "") in FACEBOOK_PAGE_ID.lower():
+            print(f"  → Usando token de página para: {acc.get('name')}")
+            return acc.get("access_token")
+    # si no matchea, usar el primero disponible
+    if accounts:
+        print(f"  → Usando primera página disponible: {accounts[0].get('name')}")
+        return accounts[0].get("access_token"), accounts[0].get("id")
+    return None
+
+
 def get_facebook_posts(limit=20):
     fields = "id,message,story,created_time,full_picture,attachments{media,subattachments,type,url}"
-    endpoints = ["feed", "published_posts", "posts"]
-    for endpoint in endpoints:
-        url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/{endpoint}"
-        params = {"fields": fields, "limit": limit, "access_token": FACEBOOK_TOKEN}
+
+    # intentar obtener token de página
+    page_token_result = get_page_token()
+    if page_token_result and isinstance(page_token_result, tuple):
+        page_token, page_id = page_token_result
+    elif page_token_result:
+        page_token = page_token_result
+        page_id = FACEBOOK_PAGE_ID
+    else:
+        page_token = FACEBOOK_TOKEN
+        page_id = FACEBOOK_PAGE_ID
+
+    for endpoint in ["feed", "posts"]:
+        url = f"https://graph.facebook.com/v19.0/{page_id}/{endpoint}"
+        params = {"fields": fields, "limit": limit, "access_token": page_token}
         response = requests.get(url, params=params)
         print(f"Probando /{endpoint}: status {response.status_code}")
         if response.ok:
