@@ -2,8 +2,8 @@ name: Gabriela Ortiz - Facebook a WordPress
 
 on:
   schedule:
-    - cron: "*/30 * * * *"  # corre cada 30 minutos
-  workflow_dispatch:         # permite correrlo manualmente desde GitHub
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
 
 jobs:
   run-bot:
@@ -23,11 +23,12 @@ jobs:
       - name: Instalar dependencias
         run: pip install -r requirements.txt
 
-      - name: Restaurar último post procesado
+      - name: Restaurar IDs procesados
         uses: actions/cache@v4
         with:
-          path: last_post.txt
-          key: last-post-cache
+          path: processed_ids.txt
+          key: processed-ids-${{ github.run_id }}
+          restore-keys: processed-ids-
 
       - name: Correr bot
         env:
@@ -39,8 +40,8 @@ jobs:
           WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
         run: python bot.py
 
-      - name: Guardar último post procesado
+      - name: Guardar IDs procesados
         uses: actions/cache@v4
         with:
-          path: last_post.txt
-          key: last-post-cache
+          path: processed_ids.txt
+          key: processed-ids-${{ github.run_id }}
