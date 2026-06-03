@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 
 FACEBOOK_TOKEN = os.environ["FACEBOOK_TOKEN"]
@@ -94,11 +95,18 @@ def get_facebook_posts(limit=20):
 def generate_press_release(post_text):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {"contents": [{"parts": [{"text": GEMINI_PROMPT.format(post_text=post_text)}]}]}
-    response = requests.post(url, json=payload)
-    if not response.ok:
-        print(f"Error Gemini: {response.status_code} - {response.text}")
-    response.raise_for_status()
-    return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    for intento in range(3):
+        response = requests.post(url, json=payload)
+        if response.status_code == 429:
+            espera = 15 * (intento + 1)
+            print(f"Límite Gemini alcanzado, esperando {espera}s...")
+            time.sleep(espera)
+            continue
+        if not response.ok:
+            print(f"Error Gemini: {response.status_code} - {response.text}")
+        response.raise_for_status()
+        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    raise Exception("Gemini no respondió después de 3 intentos")
 
 
 def parse_press_release(text):
@@ -237,6 +245,7 @@ def main():
         print(f"Borrador creado: {wp_link}")
 
         save_processed_id(post_id)
+        time.sleep(5)
 
     print("\n=== Listo ===")
 
