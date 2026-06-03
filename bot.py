@@ -35,23 +35,26 @@ def save_processed_id(post_id):
 
 
 def get_facebook_posts(limit=20):
-    url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/posts"
-    params = {
-        "fields": "id,message,story,created_time,full_picture,attachments{media,type,url}",
-        "limit": limit,
-        "access_token": FACEBOOK_TOKEN,
-    }
-    response = requests.get(url, params=params)
-    if not response.ok:
-        print(f"Error Facebook API: {response.status_code} - {response.text}")
-    response.raise_for_status()
-    posts = response.json().get("data", [])
-    print(f"Posts obtenidos de Facebook: {len(posts)}")
-    for p in posts:
-        text = p.get("message") or p.get("story") or ""
-        img = p.get("full_picture", "")
-        print(f"  [{p.get('created_time','')[:10]}] texto: {repr(text[:60])} | imagen: {'SI' if img else 'NO'}")
-    return posts
+    fields = "id,message,story,created_time,full_picture,attachments{media,subattachments,type,url}"
+    endpoints = ["feed", "published_posts", "posts"]
+    for endpoint in endpoints:
+        url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/{endpoint}"
+        params = {"fields": fields, "limit": limit, "access_token": FACEBOOK_TOKEN}
+        response = requests.get(url, params=params)
+        print(f"Probando /{endpoint}: status {response.status_code}")
+        if response.ok:
+            posts = response.json().get("data", [])
+            print(f"Posts obtenidos con /{endpoint}: {len(posts)}")
+            if posts:
+                for p in posts:
+                    text = p.get("message") or p.get("story") or ""
+                    img = p.get("full_picture", "")
+                    print(f"  [{p.get('created_time','')[:10]}] texto: {repr(text[:60])} | imagen: {'SI' if img else 'NO'}")
+                return posts
+        else:
+            print(f"  Error: {response.text[:200]}")
+    print("Ningún endpoint devolvió posts.")
+    return []
 
 
 def generate_press_release(post_text):
