@@ -1,0 +1,46 @@
+name: Gabriela Ortiz - Facebook a WordPress
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"  # corre cada 30 minutos
+  workflow_dispatch:         # permite correrlo manualmente desde GitHub
+
+jobs:
+  run-bot:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Restaurar último post procesado
+        uses: actions/cache@v4
+        with:
+          path: last_post.txt
+          key: last-post-cache
+
+      - name: Correr bot
+        env:
+          FACEBOOK_TOKEN: ${{ secrets.FACEBOOK_TOKEN }}
+          FACEBOOK_PAGE_ID: ${{ secrets.FACEBOOK_PAGE_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          WP_URL: ${{ secrets.WP_URL }}
+          WP_USER: ${{ secrets.WP_USER }}
+          WP_PASSWORD: ${{ secrets.WP_PASSWORD }}
+        run: python bot.py
+
+      - name: Guardar último post procesado
+        uses: actions/cache@v4
+        with:
+          path: last_post.txt
+          key: last-post-cache
