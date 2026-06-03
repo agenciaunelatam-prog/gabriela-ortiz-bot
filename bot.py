@@ -43,6 +43,9 @@ def get_latest_facebook_post():
         "access_token": FACEBOOK_TOKEN,
     }
     response = requests.get(url, params=params)
+    if not response.ok:
+        print(f"Error Facebook API: {response.status_code}")
+        print(f"Respuesta: {response.text}")
     response.raise_for_status()
     data = response.json()
     posts = data.get("data", [])
