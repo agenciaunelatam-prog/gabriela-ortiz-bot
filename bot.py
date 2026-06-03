@@ -145,7 +145,12 @@ def generate_press_release(post_text):
     return llamar_groq(PROMPT_GACETILLA.format(post_text=post_text))
 
 
-def parse_press_release(text):
+def generar_titulo(post_text):
+    prompt = f"""En base al siguiente texto, escribí UN título periodístico en primera persona del plural, institucional y atractivo. Solo escribí el título, sin comillas ni explicaciones.\n\nTexto:\n{post_text[:400]}"""
+    return llamar_groq(prompt, temperatura=0.5).strip().strip('"').strip("'")
+
+
+def parse_press_release(text, post_text_fallback=""):
     title = ""
     body_lines = []
     for line in text.split("\n"):
@@ -155,6 +160,9 @@ def parse_press_release(text):
             body_lines.append(line)
     body = "\n".join(body_lines).strip()
     paragraphs = [f"<p>{p.strip()}</p>" for p in body.split("\n\n") if p.strip()]
+    if not title and post_text_fallback:
+        print("Título no encontrado, generando uno...")
+        title = generar_titulo(post_text_fallback)
     return title or "Sin título", "\n".join(paragraphs)
 
 
@@ -263,7 +271,7 @@ def main():
         # generar gacetilla
         print("Generando gacetilla con Groq...")
         press_release = generate_press_release(text)
-        title, body_html = parse_press_release(press_release)
+        title, body_html = parse_press_release(press_release, post_text_fallback=text)
         print(f"Título: {title}")
 
         # subir imágenes a WordPress
