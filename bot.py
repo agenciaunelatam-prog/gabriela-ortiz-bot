@@ -163,7 +163,8 @@ def publish_to_wordpress(title, content, featured_media_id=None):
     payload = {"title": title, "content": content, "status": "publish"}
     if featured_media_id:
         payload["featured_media"] = featured_media_id
-    response = requests.post(url, json=payload, auth=(WP_USER, WP_PASSWORD))
+    headers = {"Content-Type": "application/json"}
+    response = requests.post(url, json=payload, headers=headers, auth=(WP_USER, WP_PASSWORD))
     if not response.ok:
         print(f"Error WordPress: {response.status_code} - {response.text[:300]}")
     response.raise_for_status()
@@ -223,7 +224,7 @@ def main():
         print(f"Texto: {text[:120]}...")
 
         # generar gacetilla
-        print("Generando gacetilla con Gemini...")
+        print("Generando gacetilla con Groq...")
         press_release = generate_press_release(text)
         title, body_html = parse_press_release(press_release)
         print(f"Título: {title}")
@@ -235,13 +236,16 @@ def main():
         featured_media_id = None
         extra_images_html = ""
 
-        for i, img_url in enumerate(image_urls):
-            result = upload_image_to_wordpress(img_url)
-            if result:
-                media_id, source_url = result
-                if i == 0:
-                    featured_media_id = media_id
-                extra_images_html += f'<figure><img src="{source_url}" /></figure>\n'
+        for i, img_url in enumerate(image_urls[:3]):
+            try:
+                result = upload_image_to_wordpress(img_url)
+                if result:
+                    media_id, source_url = result
+                    if i == 0:
+                        featured_media_id = media_id
+                    extra_images_html += f'<figure><img src="{source_url}" /></figure>\n'
+            except Exception as e:
+                print(f"Imagen {i+1} omitida: {e}")
 
         # armar contenido final
         content = body_html
