@@ -185,11 +185,14 @@ def upload_image_to_wordpress(image_url):
         return None
 
 
-def publish_to_wordpress(title, content, featured_media_id=None):
+def publish_to_wordpress(title, content, featured_media_id=None, post_date=None):
     url = f"{WP_URL}/wp-json/wp/v2/posts"
     payload = {"title": title, "content": content, "status": "publish"}
     if featured_media_id:
         payload["featured_media"] = featured_media_id
+    if post_date:
+        # WordPress espera formato: 2026-06-03T14:00:00
+        payload["date"] = post_date[:19]
     headers = {"Content-Type": "application/json"}
     response = requests.post(url, json=payload, headers=headers, auth=(WP_USER, WP_PASSWORD))
     if not response.ok:
@@ -225,10 +228,10 @@ def main():
     processed_ids = load_processed_ids()
     print(f"Posts ya procesados: {len(processed_ids)}\n")
 
-    posts = get_facebook_posts(limit=3)
+    posts = get_facebook_posts(limit=20)
 
     nuevos = [p for p in posts if p["id"] not in processed_ids]
-    nuevos = nuevos[:3]
+    nuevos = nuevos[:10]
     print(f"\nPosts nuevos a procesar: {len(nuevos)}")
 
     if not nuevos:
@@ -287,7 +290,7 @@ def main():
 
         # publicar en WordPress
         print("Publicando en WordPress...")
-        wp_link = publish_to_wordpress(title, content, featured_media_id)
+        wp_link = publish_to_wordpress(title, content, featured_media_id, post_date=post.get("created_time"))
         print(f"Borrador creado: {wp_link}")
 
         save_processed_id(post_id)
