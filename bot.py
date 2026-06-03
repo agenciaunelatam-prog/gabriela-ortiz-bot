@@ -11,15 +11,30 @@ WP_PASSWORD = os.environ["WP_PASSWORD"]
 
 PROCESSED_FILE = "processed_ids.txt"
 
-GEMINI_PROMPT = """Sos un redactor de prensa profesional. Transformá el siguiente texto de una publicación de Facebook en una gacetilla de prensa en español.
+PROMPT_GACETILLA = """Sos un redactor de prensa institucional. Transformá el siguiente texto de una publicación de Facebook en una gacetilla de prensa en español.
 
-La gacetilla debe tener este formato exacto:
-TÍTULO: (título llamativo en estilo periodístico)
-COPETE: (una oración resumen)
-CUERPO: (2 o 3 párrafos en tercera persona, estilo periodístico)
-CIERRE: (datos de contacto si los hay en el texto, o una oración de cierre institucional)
+Tono: institucional, propositivo, con una conclusión motivacional e inspiradora al final.
+
+Estructura del texto (NO escribas los nombres de las secciones, redactá todo como un texto corrido):
+- Una oración inicial que resuma el hecho principal (funciona como copete)
+- Dos o tres párrafos de desarrollo en tercera persona, estilo periodístico
+- Un párrafo final con conclusión motivacional e inspiradora
+
+Reglas:
+- NO uses las palabras "copete", "cuerpo", "cierre" ni ningún título de sección
+- Todo el contenido va como texto corrido, sin subtítulos
+- El TÍTULO sí va al principio, en una línea separada con el prefijo TÍTULO:
 
 Publicación de Facebook:
+{post_text}"""
+
+PROMPT_FILTRO = """Analizá la siguiente publicación de Facebook de una concejal.
+
+Respondé SOLO con una de estas dos palabras: PUBLICAR o IGNORAR.
+
+Regla: respondé IGNORAR únicamente si el posteo informa que se realizó la sesión semanal del Concejo Deliberante pero NO menciona ninguna acción concreta, proyecto aprobado, reconocimiento, tema especial o hecho relevante tratado en esa sesión. En todos los demás casos, respondé PUBLICAR.
+
+Publicación:
 {post_text}"""
 
 
@@ -92,16 +107,13 @@ def get_facebook_posts(limit=20):
     return []
 
 
-def generate_press_release(post_text):
+def llamar_groq(prompt, temperatura=0.7):
     url = "https://api.groq.com/openai/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {GROQ_API_KEY}",
-        "Content-Type": "application/json",
-    }
+    headers = {"Authorization": f"Bearer {GROQ_API_KEY}", "Content-Type": "application/json"}
     payload = {
         "model": "llama-3.3-70b-versatile",
-        "messages": [{"role": "user", "content": GEMINI_PROMPT.format(post_text=post_text)}],
-        "temperature": 0.7,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperatura,
     }
     for intento in range(3):
         response = requests.post(url, headers=headers, json=payload)
@@ -115,6 +127,16 @@ def generate_press_release(post_text):
         response.raise_for_status()
         return response.json()["choices"][0]["message"]["content"]
     raise Exception("Groq no respondió después de 3 intentos")
+
+
+def debe_publicar(post_text):
+    respuesta = llamar_groq(PROMPT_FILTRO.format(post_text=post_text), temperatura=0).strip().upper()
+    print(f"Filtro: {respuesta}")
+    return "PUBLICAR" in respuesta
+
+
+def generate_press_release(post_text):
+    return llamar_groq(PROMPT_GACETILLA.format(post_text=post_text))
 
 
 def parse_press_release(text):
@@ -222,6 +244,12 @@ def main():
             continue
 
         print(f"Texto: {text[:120]}...")
+
+        # filtrar posts de sesión sin contenido relevante
+        if not debe_publicar(text):
+            print("Post omitido: sesión del Concejo sin contenido relevante.")
+            save_processed_id(post_id)
+            continue
 
         # generar gacetilla
         print("Generando gacetilla con Groq...")
