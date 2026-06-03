@@ -160,7 +160,7 @@ def upload_image_to_wordpress(image_url):
 
 def publish_to_wordpress(title, content, featured_media_id=None):
     url = f"{WP_URL}/wp-json/wp/v2/posts"
-    payload = {"title": title, "content": content, "status": "draft"}
+    payload = {"title": title, "content": content, "status": "publish"}
     if featured_media_id:
         payload["featured_media"] = featured_media_id
     response = requests.post(url, json=payload, auth=(WP_USER, WP_PASSWORD))
@@ -197,11 +197,10 @@ def main():
     processed_ids = load_processed_ids()
     print(f"Posts ya procesados: {len(processed_ids)}\n")
 
-    posts = get_facebook_posts(limit=20)
+    posts = get_facebook_posts(limit=3)
 
     nuevos = [p for p in posts if p["id"] not in processed_ids]
-    # máximo 5 por ejecución para respetar cuota de Gemini
-    nuevos = nuevos[:5]
+    nuevos = nuevos[:3]
     print(f"\nPosts nuevos a procesar: {len(nuevos)}")
 
     if not nuevos:
