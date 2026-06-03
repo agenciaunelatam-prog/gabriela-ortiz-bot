@@ -49,9 +49,13 @@ def get_latest_facebook_post():
     response.raise_for_status()
     data = response.json()
     posts = data.get("data", [])
-    # retorna el post más reciente que tenga texto
+    print(f"Posts encontrados: {len(posts)}")
+    for p in posts:
+        print(f"  - ID: {p.get('id')} | message: {repr(p.get('message', '')[:80])} | story: {repr(p.get('story', '')[:80])}")
     for post in posts:
-        if post.get("message"):
+        text = post.get("message") or post.get("story")
+        if text:
+            post["message"] = text
             return post
     return None
 
