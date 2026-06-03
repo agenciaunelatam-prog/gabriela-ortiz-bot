@@ -1,5 +1,4 @@
 import os
-import json
 import requests
 
 FACEBOOK_TOKEN = os.environ["FACEBOOK_TOKEN"]
@@ -35,11 +34,11 @@ def save_last_processed_id(post_id):
         f.write(post_id)
 
 
-def get_latest_facebook_post():
+def get_facebook_posts(limit=20):
     url = f"https://graph.facebook.com/v19.0/{FACEBOOK_PAGE_ID}/posts"
     params = {
-        "fields": "id,message,created_time",
-        "limit": 5,
+        "fields": "id,message,story,created_time",
+        "limit": limit,
         "access_token": FACEBOOK_TOKEN,
     }
     response = requests.get(url, params=params)
@@ -49,36 +48,28 @@ def get_latest_facebook_post():
     response.raise_for_status()
     data = response.json()
     posts = data.get("data", [])
-    print(f"Posts encontrados: {len(posts)}")
+    print(f"Posts obtenidos de Facebook: {len(posts)}")
     for p in posts:
-        print(f"  - ID: {p.get('id')} | message: {repr(p.get('message', '')[:80])} | story: {repr(p.get('story', '')[:80])}")
-    for post in posts:
-        text = post.get("message") or post.get("story")
-        if text:
-            post["message"] = text
-            return post
-    return None
+        msg = p.get("message", "")
+        story = p.get("story", "")
+        print(f"  - {p.get('created_time', '')[:10]} | message: {repr(msg[:60])} | story: {repr(story[:60])}")
+    return posts
 
 
 def generate_press_release(post_text):
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     payload = {
-        "contents": [
-            {
-                "parts": [
-                    {"text": GEMINI_PROMPT.format(post_text=post_text)}
-                ]
-            }
-        ]
+        "contents": [{"parts": [{"text": GEMINI_PROMPT.format(post_text=post_text)}]}]
     }
     response = requests.post(url, json=payload)
+    if not response.ok:
+        print(f"Error Gemini API: {response.status_code} - {response.text}")
     response.raise_for_status()
     result = response.json()
     return result["candidates"][0]["content"]["parts"][0]["text"]
 
 
 def parse_press_release(text):
-    """Extrae título y cuerpo del texto generado por Gemini."""
     title = ""
     body_lines = []
     for line in text.split("\n"):
@@ -87,7 +78,6 @@ def parse_press_release(text):
         else:
             body_lines.append(line)
     body = "\n".join(body_lines).strip()
-    # convierte saltos de línea a párrafos HTML
     paragraphs = [f"<p>{p.strip()}</p>" for p in body.split("\n\n") if p.strip()]
     return title, "\n".join(paragraphs)
 
@@ -97,43 +87,54 @@ def publish_to_wordpress(title, content):
     payload = {
         "title": title,
         "content": content,
-        "status": "draft",  # cambiá a "publish" para publicar directo
+        "status": "draft",
     }
     response = requests.post(url, json=payload, auth=(WP_USER, WP_PASSWORD))
+    if not response.ok:
+        print(f"Error WordPress API: {response.status_code} - {response.text}")
     response.raise_for_status()
-    return response.json()["link"]
+    return response.json().get("link", "sin link")
 
 
 def main():
-    print("Buscando nuevos posts en Facebook...")
-    post = get_latest_facebook_post()
-
-    if not post:
-        print("No se encontraron posts con texto.")
-        return
-
-    post_id = post["id"]
+    print("Buscando posts en Facebook...")
+    posts = get_facebook_posts(limit=20)
     last_id = get_last_processed_id()
+    print(f"Último post procesado: {last_id}")
 
-    if post_id == last_id:
-        print("No hay posts nuevos desde la última ejecución.")
+    nuevos = []
+    for post in posts:
+        if post["id"] == last_id:
+            break
+        text = post.get("message") or post.get("story")
+        if text:
+            post["_text"] = text
+            nuevos.append(post)
+
+    if not nuevos:
+        print("No hay posts nuevos con texto.")
         return
 
-    print(f"Nuevo post encontrado: {post_id}")
-    print(f"Texto: {post['message'][:100]}...")
+    print(f"Posts nuevos a procesar: {len(nuevos)}")
 
-    print("Generando gacetilla con Gemini...")
-    press_release = generate_press_release(post["message"])
+    # procesa del más viejo al más nuevo
+    for post in reversed(nuevos):
+        print(f"\nProcesando post: {post['id']} ({post.get('created_time', '')[:10]})")
+        print(f"Texto: {post['_text'][:100]}...")
 
-    title, content = parse_press_release(press_release)
-    print(f"Título generado: {title}")
+        print("Generando gacetilla con Gemini...")
+        press_release = generate_press_release(post["_text"])
 
-    print("Publicando en WordPress...")
-    wp_link = publish_to_wordpress(title, content)
-    print(f"Borrador creado: {wp_link}")
+        title, content = parse_press_release(press_release)
+        print(f"Título generado: {title}")
 
-    save_last_processed_id(post_id)
-    print("Listo.")
+        print("Publicando en WordPress...")
+        wp_link = publish_to_wordpress(title, content)
+        print(f"Borrador creado: {wp_link}")
+
+        save_last_processed_id(post["id"])
+
+    print("\nListo.")
 
 
 if __name__ == "__main__":
