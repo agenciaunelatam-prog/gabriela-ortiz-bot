@@ -4,7 +4,7 @@ import requests
 
 FACEBOOK_TOKEN = os.environ["FACEBOOK_TOKEN"]
 FACEBOOK_PAGE_ID = os.environ["FACEBOOK_PAGE_ID"]
-GEMINI_API_KEY = os.environ["GEMINI_API_KEY"]
+GROQ_API_KEY = os.environ["GROQ_API_KEY"]
 WP_URL = os.environ["WP_URL"].rstrip("/")
 WP_USER = os.environ["WP_USER"]
 WP_PASSWORD = os.environ["WP_PASSWORD"]
@@ -93,20 +93,28 @@ def get_facebook_posts(limit=20):
 
 
 def generate_press_release(post_text):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={GEMINI_API_KEY}"
-    payload = {"contents": [{"parts": [{"text": GEMINI_PROMPT.format(post_text=post_text)}]}]}
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {GROQ_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    payload = {
+        "model": "llama-3.3-70b-versatile",
+        "messages": [{"role": "user", "content": GEMINI_PROMPT.format(post_text=post_text)}],
+        "temperature": 0.7,
+    }
     for intento in range(3):
-        response = requests.post(url, json=payload)
+        response = requests.post(url, headers=headers, json=payload)
         if response.status_code == 429:
-            espera = 15 * (intento + 1)
-            print(f"Límite Gemini alcanzado, esperando {espera}s...")
+            espera = 20 * (intento + 1)
+            print(f"Límite Groq alcanzado, esperando {espera}s...")
             time.sleep(espera)
             continue
         if not response.ok:
-            print(f"Error Gemini: {response.status_code} - {response.text}")
+            print(f"Error Groq: {response.status_code} - {response.text[:200]}")
         response.raise_for_status()
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-    raise Exception("Gemini no respondió después de 3 intentos")
+        return response.json()["choices"][0]["message"]["content"]
+    raise Exception("Groq no respondió después de 3 intentos")
 
 
 def parse_press_release(text):
@@ -192,6 +200,8 @@ def main():
     posts = get_facebook_posts(limit=20)
 
     nuevos = [p for p in posts if p["id"] not in processed_ids]
+    # máximo 5 por ejecución para respetar cuota de Gemini
+    nuevos = nuevos[:5]
     print(f"\nPosts nuevos a procesar: {len(nuevos)}")
 
     if not nuevos:
